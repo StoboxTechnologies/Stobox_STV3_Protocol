@@ -2,5 +2,13 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc = "0.8.28"
+via_ir = true
+
+[rpc_endpoints]
+arbsepolia = "${ARB_SEPOLIA_RPC_URL}"
+
+[etherscan]
+arbsepolia = { key = "${ARBISCAN_API_KEY}", chain = "421614", url = "https://api-sepolia.arbiscan.io/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
