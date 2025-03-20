@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.28;
 
 import {Test, console} from "forge-std/Test.sol";
 import {stdError} from "forge-std/StdError.sol";
@@ -8,34 +8,40 @@ import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.so
 import {DiamondInit} from "src/upgradeInitializers/DiamondInit.sol";
 import {DiamondLoupeFacet} from "src/facets/DiamondLoupeFacet.sol";
 import {DiamondCutFacet} from "src/facets/DiamondCutFacet.sol";
-import {DiamondERC20STV3} from "src/DiamondERC20STV3.sol";
-import {RolesFacet} from "src/facets/RolesFacet.sol";
-import {CCIPFacet} from "src/facets/CCIPFacet.sol";
-import {TransferValidationFacet} from "src/facets/TransferValidationFacet.sol";
+import {StoboxProtocolSTV3} from "src/StoboxProtocolSTV3.sol";
+import {CCTFacet} from "src/facets/CCTFacet.sol";
+import {DefaultValidationFacet} from "src/facets/DefaultValidationFacet.sol";
 
 import {IDiamond} from "src/interfaces/IDiamond.sol";
 import {IBaseERC20} from "src/interfaces/IBaseERC20.sol";
-import {LibRoles} from "src/libraries/LibRoles.sol";
+import {ITransferValidation} from "src/interfaces/ITransferValidation.sol";
+
+import {LibCCT} from "src/libraries/LibCCT.sol";
+import {DeployDiamondLibrary} from "script/Deploy.s.sol";
 
 contract BaseERC20Test is Test {
     bytes4[] sig;
     IDiamond.FacetCut[] facetCuts;
 
-    string name = "TestDiamond V1.1";
-    string symbol = "TDV11";
+    bytes4[] sigIm;
+    IDiamond.FacetCut[] facetCutsIm;
+
+    string name = "TestDiamond V1.1.1";
+    string symbol = "TDV111";
     uint8 decimals = 18;
     uint256 maxSupply = 100_000_000e18;
-    address foundryDeployer = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
+    address foundryDeployer = 0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496;
+    //address foundryDeployer = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
 
     DiamondInit diamondInit;
     DiamondCutFacet diamondCutFacet;
     DiamondLoupeFacet diamondLoupeFacet;
-    DiamondERC20STV3 baseERC20;
-    CCIPFacet cCIPFacet;
-    RolesFacet rolesFacet;
-    TransferValidationFacet transferValidationFacet;
+    StoboxProtocolSTV3 baseERC20;
+    CCTFacet cctFacet;
+    DefaultValidationFacet defaultValidationFacet;
 
     IBaseERC20 token;
+    ITransferValidation tokenValidation;
 
     function cutFacetsPush(address facetAddress) internal {
         facetCuts.push(
@@ -44,128 +50,49 @@ contract BaseERC20Test is Test {
     }
 
     function beforeTestSetup(bytes4 testSelector) public pure returns (bytes[] memory beforeTestCalldata) {
-        if (testSelector == this.test_OwnerRevokesMintRole.selector) {
+        if (testSelector == this.test_DeployerRemoveCCTOperator.selector) {
             beforeTestCalldata = new bytes[](1);
-            beforeTestCalldata[0] = abi.encodePacked(this.test_OwnerGrantsMintRole.selector);
-        }
-
-        if (testSelector == this.test_OwnerRevokesBurnRole.selector) {
-            beforeTestCalldata = new bytes[](1);
-            beforeTestCalldata[0] = abi.encodePacked(this.test_OwnerGrantsBurnRole.selector);
+            beforeTestCalldata[0] = abi.encodePacked(this.test_DeployerAddsCCTOperator.selector);
         }
 
         if (testSelector == this.test_PositiveMintFlow.selector) {
             beforeTestCalldata = new bytes[](1);
-            beforeTestCalldata[0] = abi.encodePacked(this.test_OwnerGrantsMintRole.selector);
+            beforeTestCalldata[0] = abi.encodePacked(this.test_DeployerAddsCCTOperator.selector);
         }
 
         if (testSelector == this.test_PositiveBurnFlow.selector) {
             beforeTestCalldata = new bytes[](1);
-            beforeTestCalldata[0] = abi.encodePacked(this.test_OwnerGrantsMintAndBurnRoles.selector);
+            beforeTestCalldata[0] = abi.encodePacked(this.test_DeployerAddsCCTOperator.selector);
+        }
+
+        if (testSelector == this.test_PositiveBurnFromFlow.selector) {
+            beforeTestCalldata = new bytes[](1);
+            beforeTestCalldata[0] = abi.encodePacked(this.test_DeployerAddsCCTOperator.selector);
+        }
+
+        if (testSelector == this.test_RevertBurnIf_NotCCTOperator.selector) {
+            beforeTestCalldata = new bytes[](2);
+            beforeTestCalldata[0] = abi.encodePacked(this.test_DeployerAddsCCTOperator.selector);
+            beforeTestCalldata[1] = abi.encodePacked(this.test_PositiveMintFlow.selector);
+        }
+
+        if (testSelector == this.test_RevertBurnFromIf_NotCCTOperator.selector) {
+            beforeTestCalldata = new bytes[](1);
+            beforeTestCalldata[0] = abi.encodePacked(this.test_DeployerAddsCCTOperator.selector);
         }
     }
 
     function setUp() public {
-        diamondInit = new DiamondInit();
-
-        diamondCutFacet = new DiamondCutFacet();
-        sig.push(diamondCutFacet.diamondCut.selector);
-
-        cutFacetsPush(address(diamondCutFacet));
-
-        sig.pop();
-
-        diamondLoupeFacet = new DiamondLoupeFacet();
-        sig.push(diamondLoupeFacet.facets.selector);
-        sig.push(diamondLoupeFacet.facetFunctionSelectors.selector);
-        sig.push(diamondLoupeFacet.facetAddresses.selector);
-        sig.push(diamondLoupeFacet.facetAddress.selector);
-        sig.push(diamondLoupeFacet.supportsInterface.selector);
-
-        cutFacetsPush(address(diamondLoupeFacet));
-
-        uint256 len = sig.length;
-        for (uint256 i = 0; i < len; i++) {
-            sig.pop();
-        }
-
-        cCIPFacet = new CCIPFacet();
-        sig.push(bytes4(keccak256("burn(uint256)")));
-        sig.push(bytes4(keccak256("burn(address,uint256)")));
-        sig.push(cCIPFacet.burnFrom.selector);
-        sig.push(cCIPFacet.mint.selector);
-        sig.push(cCIPFacet.transferAndCall.selector);
-
-        cutFacetsPush(address(cCIPFacet));
-
-        uint256 len1 = sig.length;
-        for (uint256 i = 0; i < len1; i++) {
-            sig.pop();
-        }
-
-        rolesFacet = new RolesFacet();
-        sig.push(rolesFacet.grantMintAndBurnRoles.selector);
-        sig.push(rolesFacet.grantMintRole.selector);
-        sig.push(rolesFacet.grantBurnRole.selector);
-        sig.push(rolesFacet.revokeMintRole.selector);
-        sig.push(rolesFacet.revokeBurnRole.selector);
-        sig.push(rolesFacet.getMinters.selector);
-        sig.push(rolesFacet.getBurners.selector);
-        sig.push(rolesFacet.isMinter.selector);
-        sig.push(rolesFacet.isBurner.selector);
-
-        cutFacetsPush(address(rolesFacet));
-
-        uint256 len2 = sig.length;
-        for (uint256 i = 0; i < len2; i++) {
-            sig.pop();
-        }
-
-        transferValidationFacet = new TransferValidationFacet();
-        sig.push(transferValidationFacet.beforeUpdateValidation.selector);
-        sig.push(transferValidationFacet.afterUpdateValidation.selector);
-
-        cutFacetsPush(address(transferValidationFacet));
-
-        uint256 len3 = sig.length;
-        for (uint256 i = 0; i < len3; i++) {
-            sig.pop();
-        }
-
-        bytes memory functionCall =
-            abi.encodeWithSignature("init(string,string,uint8,uint256)", name, symbol, decimals, maxSupply);
-
-        DiamondERC20STV3.DiamondArgs memory diamondArgs =
-            DiamondERC20STV3.DiamondArgs({owner: msg.sender, init: address(diamondInit), initCalldata: functionCall});
-
-        baseERC20 = new DiamondERC20STV3(facetCuts, diamondArgs);
-
-        sig.push(baseERC20.owner.selector);
-        sig.push(baseERC20.name.selector);
-        sig.push(baseERC20.symbol.selector);
-        sig.push(baseERC20.decimals.selector);
-        sig.push(baseERC20.totalSupply.selector);
-        sig.push(baseERC20.balanceOf.selector);
-        sig.push(baseERC20.maxSupply.selector);
-        sig.push(baseERC20.transferOwnership.selector);
-        sig.push(baseERC20.transfer.selector);
-        sig.push(baseERC20.allowance.selector);
-        sig.push(baseERC20.approve.selector);
-        sig.push(baseERC20.transferFrom.selector);
-
-        cutFacetsPush(address(baseERC20));
-
-        uint256 len4 = sig.length;
-        for (uint256 i = 0; i < len4; i++) {
-            sig.pop();
-        }
+        (baseERC20,,,,) = DeployDiamondLibrary.deployDiamond(
+            foundryDeployer, foundryDeployer, name, symbol, decimals, maxSupply, sig, facetCuts, sigIm, facetCutsIm
+        );
 
         token = IBaseERC20(address(baseERC20));
-        console.log("New ERC20 Token deployed to", address(baseERC20));
+        tokenValidation = ITransferValidation(address(baseERC20));
     }
 
-    function test_OwnerWasSet() public view {
-        assertEq(baseERC20.owner(), foundryDeployer);
+    function test_DeployerWasSet() public view {
+        assertEq(baseERC20.deployer(), foundryDeployer);
     }
 
     function test_NameWasSet() public view {
@@ -188,7 +115,18 @@ contract BaseERC20Test is Test {
         assertEq(baseERC20.totalSupply(), 0);
     }
 
-    function test_PositiveTransferOwnership() public {
+    function test_PositiveSetDeployer() public {
+        vm.startPrank(foundryDeployer);
+        assertEq(token.deployer(), foundryDeployer);
+
+        address newDeployer = makeAddr("newDeployer");
+        token.setDeployer(newDeployer);
+        assertEq(token.deployer(), newDeployer);
+
+        vm.stopPrank();
+    }
+
+    function test_PositiveSetOwner() public {
         vm.startPrank(foundryDeployer);
         assertEq(token.owner(), foundryDeployer);
 
@@ -199,46 +137,51 @@ contract BaseERC20Test is Test {
         vm.stopPrank();
     }
 
-    function test_RevertTransferOwnershipIf_NotOwner() public {
-        vm.expectPartialRevert(IBaseERC20.InvalidOwner.selector);
+    function test_RevertSetDeployerIf_NotDeployer() public {
+        vm.expectPartialRevert(IBaseERC20.NotDeployer.selector);
+        address newDeployer = makeAddr("newDeployer");
+        vm.prank(newDeployer);
+        token.setDeployer(newDeployer);
+    }
+
+    function test_RevertTransferOwnershipIf_NotDeployer() public {
+        vm.expectPartialRevert(IBaseERC20.NotDeployer.selector);
         address newOwner = makeAddr("newOwner");
+        vm.prank(newOwner);
         token.transferOwnership(newOwner);
     }
 
-    function test_OwnerGrantsMintRole() public {
+    function test_DeployerAddsCCTOperator() public {
         vm.prank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
-        assertTrue(token.isMinter(foundryDeployer));
+        token.addCCTOperator(foundryDeployer);
+        assertTrue(token.isCCTOperator(foundryDeployer));
     }
 
-    function test_OwnerRevokesMintRole() public {
+    function test_DeployerRemoveCCTOperator() public {
         vm.prank(foundryDeployer);
-        token.revokeMintRole(foundryDeployer);
-        assertFalse(token.isMinter(foundryDeployer));
+        token.removeCCTOperator(foundryDeployer);
+        assertFalse(token.isCCTOperator(foundryDeployer));
     }
 
-    function test_OwnerGrantsBurnRole() public {
-        vm.prank(foundryDeployer);
-        token.grantBurnRole(foundryDeployer);
-        assertTrue(token.isBurner(foundryDeployer));
-    }
+    function test_GetCCTOperators() public {
+        address user = makeAddr("user");
+        address[] memory operatorsList = new address[](2);
+        operatorsList[0] = foundryDeployer;
+        operatorsList[1] = user;
 
-    function test_OwnerRevokesBurnRole() public {
-        vm.prank(foundryDeployer);
-        token.revokeBurnRole(foundryDeployer);
-        assertFalse(token.isBurner(foundryDeployer));
-    }
+        vm.startPrank(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
+        token.addCCTOperator(user);
 
-    function test_OwnerGrantsMintAndBurnRoles() public {
-        vm.prank(foundryDeployer);
-        token.grantMintAndBurnRoles(foundryDeployer);
-        assertTrue(token.isMinter(foundryDeployer));
-        assertTrue(token.isBurner(foundryDeployer));
+        assertEq(token.getCCTOperators()[0], operatorsList[0]);
+        assertEq(token.getCCTOperators()[1], operatorsList[1]);
     }
 
     function test_PositiveMintFlow() public {
         vm.prank(foundryDeployer);
         token.mint(foundryDeployer, 20e18);
+
+        assertEq(token.balanceOf(foundryDeployer), 20e18);
     }
 
     function test_PositiveBurnFlow() public {
@@ -252,27 +195,47 @@ contract BaseERC20Test is Test {
         vm.stopPrank();
     }
 
-    function test_RevertMintIf_NotMinter() public {
-        vm.expectPartialRevert(LibRoles.SenderNotMinter.selector);
+    function test_PositiveBurnFromFlow() public {
+        address user = makeAddr("user");
+        vm.prank(foundryDeployer);
+        token.mint(user, 20e18);
+        assertEq(token.balanceOf(user), 20e18);
+
+        vm.prank(user);
+        token.approve(foundryDeployer, 15e18);
+
+        vm.prank(foundryDeployer);
+        token.burnFrom(user, 15e18);
+        assertEq(token.balanceOf(user), 5e18);
+    }
+
+    function test_RevertMintIf_NotCCTOperator() public {
+        vm.expectPartialRevert(LibCCT.NotCCTOperator.selector);
         token.mint(foundryDeployer, 20e18);
     }
 
-    function test_RevertBurnIf_NotBurner() public {
-        vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
-
-        token.mint(foundryDeployer, 20e18);
-        assertEq(token.balanceOf(foundryDeployer), 20e18);
-
-        vm.expectPartialRevert(LibRoles.SenderNotBurner.selector);
+    function test_RevertBurnIf_NotCCTOperator() public {
+        address notCCTOperator = makeAddr("notCCTOperator");
+        vm.prank(notCCTOperator);
+        vm.expectPartialRevert(LibCCT.NotCCTOperator.selector);
         token.burn(20e18);
+    }
 
-        vm.stopPrank();
+    function test_RevertBurnFromIf_NotCCTOperator() public {
+        address user = makeAddr("user");
+        vm.prank(foundryDeployer);
+        token.mint(user, 20e18);
+        assertEq(token.balanceOf(user), 20e18);
+
+        address notCCTOperator = makeAddr("notCCTOperator");
+        vm.prank(notCCTOperator);
+        vm.expectPartialRevert(LibCCT.NotCCTOperator.selector);
+        token.burnFrom(user, 1e18);
     }
 
     function test_TotalSupplyChanges() public {
         vm.startPrank(foundryDeployer);
-        token.grantMintAndBurnRoles(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
 
         token.mint(foundryDeployer, 1000e18);
         assertEq(token.totalSupply(), 1000e18);
@@ -285,7 +248,7 @@ contract BaseERC20Test is Test {
 
     function test_RevertIf_MaxSupplyExceeded() public {
         vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
 
         vm.expectPartialRevert(IBaseERC20.MaxSupplyExceeded.selector);
         token.mint(foundryDeployer, maxSupply + 1);
@@ -303,7 +266,7 @@ contract BaseERC20Test is Test {
 
     function test_PositiveTransferFlow() public {
         vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
         address user = makeAddr("user");
 
         token.mint(foundryDeployer, 100e18);
@@ -327,7 +290,7 @@ contract BaseERC20Test is Test {
 
     function test_RevertTransferIf_InsufficientBalance() public {
         vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
         token.mint(foundryDeployer, 100e18);
 
         address to = makeAddr("to");
@@ -344,7 +307,7 @@ contract BaseERC20Test is Test {
         assertEq(token.allowance(user, foundryDeployer), 30e18);
 
         vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
 
         token.mint(user, 100e18);
         token.transferFrom(user, foundryDeployer, 30e18);
@@ -363,7 +326,7 @@ contract BaseERC20Test is Test {
         assertEq(token.allowance(user, foundryDeployer), 30e18);
 
         vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
 
         token.mint(user, 100e18);
 
@@ -380,7 +343,7 @@ contract BaseERC20Test is Test {
         assertEq(token.allowance(user, foundryDeployer), type(uint256).max);
 
         vm.startPrank(foundryDeployer);
-        token.grantMintRole(foundryDeployer);
+        token.addCCTOperator(foundryDeployer);
 
         token.mint(user, 100e18);
         token.transferFrom(user, foundryDeployer, 30e18);
@@ -390,5 +353,17 @@ contract BaseERC20Test is Test {
         assertEq(token.allowance(user, foundryDeployer), type(uint256).max);
 
         vm.stopPrank();
+    }
+
+    function test_DefaultBeforeUpdateValidationPass() public {
+        address from = makeAddr("from");
+        address to = makeAddr("to");
+        tokenValidation.beforeUpdateValidation(from, to, 5);
+    }
+
+    function test_DefaultAfterUpdateValidation() public {
+        address from = makeAddr("from");
+        address to = makeAddr("to");
+        tokenValidation.afterUpdateValidation(from, to, 5);
     }
 }

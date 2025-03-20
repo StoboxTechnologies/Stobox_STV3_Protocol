@@ -5,15 +5,15 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IERC173} from "./interfaces/IERC173.sol";
 import {IDiamondCut} from "./interfaces/IDiamondCut.sol";
-
 import {LibDiamond} from "./libraries/LibDiamond.sol";
 import {LibERC20} from "./libraries/LibERC20.sol";
 
-contract DiamondERC20STV3 is IERC20 {
+contract StoboxProtocolSTV3 is IERC20 {
     // This is used in diamond constructor
     // more arguments are added to this struct
     // this avoids stack too deep errors
     struct DiamondArgs {
+        address deployer;
         address owner;
         address init;
         bytes initCalldata;
@@ -21,13 +21,20 @@ contract DiamondERC20STV3 is IERC20 {
 
     // When no function exists for function called
     error FunctionNotFound(bytes4 _functionSelector);
-    // When not owner of the contract try to change owner
-    error InvalidOwner(address _caller);
+    error ZeroAddressIsNotAllowed();
+
+    modifier onlyDeployer() {
+        LibDiamond.enforceIsDeployer();
+        _;
+    }
 
     constructor(IDiamondCut.FacetCut[] memory _diamondCut, DiamondArgs memory _args) payable {
-        LibDiamond.setContractOwner(_args.owner);
+        LibDiamond.setDeployer(_args.deployer);
+        LibDiamond.transferOwnership(_args.owner);
         LibDiamond.diamondCut(_diamondCut, _args.init, _args.initCalldata);
     }
+
+    receive() external payable {}
 
     // Find facet for function that is called and execute the
     // function if a facet is found and return any value.
@@ -58,11 +65,46 @@ contract DiamondERC20STV3 is IERC20 {
         }
     }
 
-    receive() external payable {}
+    // Requirements:
+    // - `to` cannot be the zero address.
+    // - the caller must have a balance of at least `value`.
+    function transfer(address to, uint256 value) external returns (bool) {
+        return LibERC20.transfer(to, value);
+    }
 
-    // @dev Get the address of the owner
-    function owner() external view returns (address) {
-        return LibDiamond.contractOwner();
+    // NOTE: If `value` is the maximum `uint256`, the allowance is not updated on
+    // `transferFrom`. This is semantically equivalent to an infinite approval.
+    // Requirements:
+    // - `spender` cannot be the zero address.
+    function approve(address spender, uint256 value) external returns (bool) {
+        return LibERC20.approve(spender, value);
+    }
+
+    // Skips emitting an {Approval} event indicating an allowance update. This is not required by the ERC.
+    // NOTE: Does not update the allowance if the current allowance
+    // is the maximum `uint256`.
+    // Requirements:
+    // - `from` and `to` cannot be the zero address.
+    // - `from` must have a balance of at least `value`.
+    // - the caller must have allowance for ``from``'s tokens of at least `value`
+    function transferFrom(address from, address to, uint256 value) external returns (bool) {
+        return LibERC20.transferFrom(from, to, value);
+    }
+
+    // @dev Set the address of the new deployer of the contract
+    // Can only be called by the current deployer.
+    // @param newDeployer The address of the new deployer of the contract
+    function setDeployer(address newDeployer) external onlyDeployer {
+        require(newDeployer != address(0), ZeroAddressIsNotAllowed());
+        LibDiamond.setDeployer(newDeployer);
+    }
+
+    // @dev Set the address of the new owner of the contract
+    // Can only be called by the current deployer.
+    // @param newOwner The address of the new owner of the contract
+    function transferOwnership(address newOwner) external onlyDeployer {
+        require(newOwner != address(0), ZeroAddressIsNotAllowed());
+        LibDiamond.transferOwnership(newOwner);
     }
 
     // @dev Returns the name of the token.
@@ -95,42 +137,17 @@ contract DiamondERC20STV3 is IERC20 {
         return LibERC20.maxSupply();
     }
 
-    // @dev Set the address of the new owner of the contract
-    // Set newOwner to address(0) to renounce any ownership.
-    // Can only be called by the current owner.
-    // @param newOwner The address of the new owner of the contract
-    function transferOwnership(address newOwner) external {
-        require(LibERC20._msgSender() == LibDiamond.contractOwner(), InvalidOwner(LibERC20._msgSender()));
-        LibDiamond.setContractOwner(newOwner);
-    }
-
-    // Requirements:
-    // - `to` cannot be the zero address.
-    // - the caller must have a balance of at least `value`.
-    function transfer(address to, uint256 value) external returns (bool) {
-        return LibERC20.transfer(to, value);
-    }
-
     function allowance(address owner_, address spender) external view returns (uint256) {
         return LibERC20.allowance(owner_, spender);
     }
 
-    // NOTE: If `value` is the maximum `uint256`, the allowance is not updated on
-    // `transferFrom`. This is semantically equivalent to an infinite approval.
-    // Requirements:
-    // - `spender` cannot be the zero address.
-    function approve(address spender, uint256 value) external returns (bool) {
-        return LibERC20.approve(spender, value);
+    // @dev Get the address of the deployer
+    function deployer() external view returns (address) {
+        return LibDiamond.deployer();
     }
 
-    // Skips emitting an {Approval} event indicating an allowance update. This is not required by the ERC.
-    // NOTE: Does not update the allowance if the current allowance
-    // is the maximum `uint256`.
-    // Requirements:
-    // - `from` and `to` cannot be the zero address.
-    // - `from` must have a balance of at least `value`.
-    // - the caller must have allowance for ``from``'s tokens of at least `value`
-    function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        return LibERC20.transferFrom(from, to, value);
+    // @dev Get the address of the owner
+    function owner() external view returns (address) {
+        return LibDiamond.owner();
     }
 }

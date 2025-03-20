@@ -4,28 +4,7 @@ pragma solidity ^0.8.0;
 import {IDiamond} from "../interfaces/IDiamond.sol";
 import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
 
-// Remember to add the loupe functions from DiamondLoupeFacet to the diamond.
-// The loupe functions are required by the EIP2535 Diamonds standard
-
-error NoSelectorsGivenToAdd();
-error NotContractOwner(address _user, address _contractOwner);
-error NoSelectorsProvidedForFacetForCut(address _facetAddress);
-error CannotAddSelectorsToZeroAddress(bytes4[] _selectors);
-error NoBytecodeAtAddress(address _contractAddress, string _message);
-error IncorrectFacetCutAction(uint8 _action);
-error CannotAddFunctionToDiamondThatAlreadyExists(bytes4 _selector);
-error CannotReplaceFunctionsFromFacetWithZeroAddress(bytes4[] _selectors);
-error CannotReplaceImmutableFunction(bytes4 _selector);
-error CannotReplaceFunctionWithTheSameFunctionFromTheSameFacet(bytes4 _selector);
-error CannotReplaceFunctionThatDoesNotExists(bytes4 _selector);
-error RemoveFacetAddressMustBeZeroAddress(address _facetAddress);
-error CannotRemoveFunctionThatDoesNotExist(bytes4 _selector);
-error CannotRemoveImmutableFunction(bytes4 _selector);
-error InitializationFunctionReverted(address _initializationContractAddress, bytes _calldata);
-
 library LibDiamond {
-    bytes32 constant DIAMOND_STORAGE_POSITION = keccak256("diamond.standard.diamond.storage");
-
     struct FacetAddressAndSelectorPosition {
         address facetAddress;
         uint16 selectorPosition;
@@ -36,37 +15,47 @@ library LibDiamond {
         mapping(bytes4 => FacetAddressAndSelectorPosition) facetAddressAndSelectorPosition;
         bytes4[] selectors;
         mapping(bytes4 => bool) supportedInterfaces;
-        // owner of the contract
-        address contractOwner;
+        // deployer of the contract
+        address deployer;
+        address owner;
     }
 
-    function diamondStorage() internal pure returns (DiamondStorage storage ds) {
-        bytes32 position = DIAMOND_STORAGE_POSITION;
-        assembly {
-            ds.slot := position
-        }
-    }
+    bytes32 constant DIAMOND_STORAGE_POSITION = keccak256("diamond.standard.diamond.storage");
 
+    event DeployerRightsTransferred(address indexed previousDeployer, address indexed newDeployer);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event DiamondCut(IDiamondCut.FacetCut[] _diamondCut, address indexed _init, bytes _calldata);
 
-    function setContractOwner(address _newOwner) internal {
+    error NoSelectorsGivenToAdd();
+    error NotDeployer(address _user, address _deployer);
+    error NotOwner(address _user, address _owner);
+    error NoSelectorsProvidedForFacetForCut(address _facetAddress);
+    error CannotAddSelectorsToZeroAddress(bytes4[] _selectors);
+    error NoBytecodeAtAddress(address _contractAddress, string _message);
+    error IncorrectFacetCutAction(uint8 _action);
+    error CannotAddFunctionToDiamondThatAlreadyExists(bytes4 _selector);
+    error CannotReplaceFunctionsFromFacetWithZeroAddress(bytes4[] _selectors);
+    error CannotReplaceImmutableFunction(bytes4 _selector);
+    error CannotReplaceFunctionWithTheSameFunctionFromTheSameFacet(bytes4 _selector);
+    error CannotReplaceFunctionThatDoesNotExists(bytes4 _selector);
+    error RemoveFacetAddressMustBeZeroAddress(address _facetAddress);
+    error CannotRemoveFunctionThatDoesNotExist(bytes4 _selector);
+    error CannotRemoveImmutableFunction(bytes4 _selector);
+    error InitializationFunctionReverted(address _initializationContractAddress, bytes _calldata);
+
+    function setDeployer(address _newDeployer) internal {
         DiamondStorage storage ds = diamondStorage();
-        address previousOwner = ds.contractOwner;
-        ds.contractOwner = _newOwner;
-        emit OwnershipTransferred(previousOwner, _newOwner);
+
+        emit DeployerRightsTransferred(ds.deployer, _newDeployer);
+        ds.deployer = _newDeployer;
     }
 
-    function contractOwner() internal view returns (address contractOwner_) {
-        contractOwner_ = diamondStorage().contractOwner;
-    }
+    function transferOwnership(address _newOwner) internal {
+        DiamondStorage storage ds = diamondStorage();
 
-    function enforceIsContractOwner() internal view {
-        if (msg.sender != diamondStorage().contractOwner) {
-            revert NotContractOwner(msg.sender, diamondStorage().contractOwner);
-        }
+        emit OwnershipTransferred(ds.owner, _newOwner);
+        ds.owner = _newOwner;
     }
-
-    event DiamondCut(IDiamondCut.FacetCut[] _diamondCut, address _init, bytes _calldata);
 
     // Internal function version of diamondCut
     function diamondCut(IDiamondCut.FacetCut[] memory _diamondCut, address _init, bytes memory _calldata) internal {
@@ -183,6 +172,33 @@ library LibDiamond {
             } else {
                 revert InitializationFunctionReverted(_init, _calldata);
             }
+        }
+    }
+
+    function diamondStorage() internal pure returns (DiamondStorage storage ds) {
+        bytes32 position = DIAMOND_STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+
+    function deployer() internal view returns (address deployer_) {
+        deployer_ = diamondStorage().deployer;
+    }
+
+    function owner() internal view returns (address owner_) {
+        owner_ = diamondStorage().owner;
+    }
+
+    function enforceIsDeployer() internal view {
+        if (msg.sender != diamondStorage().deployer) {
+            revert NotDeployer(msg.sender, diamondStorage().deployer);
+        }
+    }
+
+    function enforceIsOwner() internal view {
+        if (msg.sender != diamondStorage().owner) {
+            revert NotOwner(msg.sender, diamondStorage().owner);
         }
     }
 

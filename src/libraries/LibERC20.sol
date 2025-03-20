@@ -5,8 +5,6 @@ import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.so
 import {ITransferValidation} from "../interfaces/ITransferValidation.sol";
 
 library LibERC20 {
-    bytes32 constant ERC20_POSITION = keccak256("erc20.storage");
-
     struct ERC20Storage {
         mapping(address account => uint256) _balances;
         mapping(address account => mapping(address spender => uint256)) _allowances;
@@ -16,6 +14,8 @@ library LibERC20 {
         uint8 _decimals;
         uint256 _maxSupply;
     }
+
+    bytes32 constant ERC20_POSITION = keccak256("erc20.storage");
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
