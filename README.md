@@ -7,7 +7,7 @@
 **[Stobox Token v.3 (STBU)](https://arbiscan.io/address/0x1cb9bd2c6e7f4a7de3778547d46c8d4c22abc093) 0x1cb9bD2c6E7F4A7DE3778547d46C8D4c22abC093**
 
 ## Overview
-[The Stobox Protocol (STV3)](https://docs.stobox.io/products-and-services/stobox-protocol-stv3) represents the next evolutionary step in blockchain-based infrastructure for asset tokenization.  
+[The Stobox Protocol (STV3)](https://docs.stobox.io/products-and-services/stobox-protocol-stv3) represents the next evolutionary step in blockchain-based infrastructure for RWA tokenization.  
 StoboxProtocolSTV3 is an ERC-20 token implementation using the [Diamond Standard (EIP-2535)](https://eips.ethereum.org/EIPS/eip-2535). It enables modularity and upgradability by separating functionality into different facets.  
 The contract logic is encapsulated within a single contract, which utilizes DELEGATECALL to invoke facet contracts that hold the business logic.
 
@@ -15,7 +15,15 @@ The contract logic is encapsulated within a single contract, which utilizes DELE
 - **Diamond Standard (EIP-2535):** Enables modular design and contract upgradability.
 - **ERC-20 Token Standard:** Supports standard token functionalities of [ERC20 token](https://eips.ethereum.org/EIPS/eip-20).
 - **Role-Based Access Control:** Grants specific addresses permission to mint and burn tokens. 
-- **Cross-Chain Compatibility with Chainlink's CCIP:** Compatable with [Cross-Chain Token (CCT) standard](https://docs.chain.link/ccip/concepts/cross-chain-tokens).  
+- **Cross-Chain Compatibility with Chainlink's CCIP:** Compatable with [Cross-Chain Token (CCT) standard](https://docs.chain.link/ccip/concepts/cross-chain-tokens).
+
+## Upcoming Features
+- **Integration with Stobox DID:** Enables decentralized identity verification for compliant asset transfers. [Learn more](https://github.com/StoboxTechnologies/ST4DIDSC)
+- **Validation with Regulatory & Compliance Rules:** Ensures adherence to legal and compliance frameworks within tokenized ecosystems.
+- **Integration with Stobox Oracle:** Provides real-time, on-chain data for enhanced asset reliability and compliance.
+- **Corporate Treasury Smart Contract Embedment:** Embeds automated treasury management for enterprises leveraging tokenized assets.
+- **Security Token Offering Smart Contract Embedment:** Facilitates compliant issuance and management of security tokens.
+- **Integration with compliant DeFi:** Enables regulated decentralized finance interactions for tokenized assets.
 
 ## Contract Structure
 
