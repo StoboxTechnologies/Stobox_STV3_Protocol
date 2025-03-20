@@ -7,9 +7,7 @@
 **[Stobox Token v.3 (STBU)](https://arbiscan.io/address/0x1cb9bd2c6e7f4a7de3778547d46c8d4c22abc093) 0x1cb9bD2c6E7F4A7DE3778547d46C8D4c22abC093**
 
 ## Overview
-[The Stobox Protocol (STV3)](https://docs.stobox.io/products-and-services/stobox-protocol-stv3) represents the next evolutionary step in blockchain-based infrastructure for RWA tokenization.  
-StoboxProtocolSTV3 is an ERC-20 token implementation using the [Diamond Standard (EIP-2535)](https://eips.ethereum.org/EIPS/eip-2535). It enables modularity and upgradability by separating functionality into different facets.  
-The contract logic is encapsulated within a single contract, which utilizes DELEGATECALL to invoke facet contracts that hold the business logic.
+[The Stobox Protocol (STV3)](https://docs.stobox.io/products-and-services/stobox-protocol-stv3) represents the next evolutionary step in blockchain-based compliant infrastructure for RWA tokenization. StoboxProtocolSTV3 is an ERC-20 token implementation using the [Diamond Standard (EIP-2535)](https://eips.ethereum.org/EIPS/eip-2535). It enables modularity and upgradability by separating functionality into different facets. The contract logic is encapsulated within a single contract, which utilizes DELEGATECALL to invoke facet contracts that hold the business logic.
 
 ## Features
 - **Diamond Standard (EIP-2535):** Enables modular design and contract upgradability.
