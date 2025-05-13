@@ -5,10 +5,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IERC173} from "./interfaces/IERC173.sol";
 import {IDiamondCut} from "./interfaces/IDiamondCut.sol";
+import {IVersioned} from "./interfaces/IVersioned.sol";
 import {LibDiamond} from "./libraries/LibDiamond.sol";
 import {LibERC20} from "./libraries/LibERC20.sol";
+import {LibVersion} from "./libraries/LibVersion.sol";
 
-contract StoboxProtocolSTV3 is IERC20 {
+contract StoboxProtocolSTV3 is IERC20, IVersioned {
     // This is used in diamond constructor
     // more arguments are added to this struct
     // this avoids stack too deep errors
@@ -32,6 +34,9 @@ contract StoboxProtocolSTV3 is IERC20 {
         LibDiamond.setDeployer(_args.deployer);
         LibDiamond.transferOwnership(_args.owner);
         LibDiamond.diamondCut(_diamondCut, _args.init, _args.initCalldata);
+        
+        // Set initial version
+        LibVersion.setVersion(1, 0, 0);
     }
 
     receive() external payable {}
@@ -149,5 +154,18 @@ contract StoboxProtocolSTV3 is IERC20 {
     // @dev Get the address of the owner
     function owner() external view returns (address) {
         return LibDiamond.owner();
+    }
+
+    // Versioning functions
+    function getVersion() external view override returns (Version memory) {
+        return LibVersion.getVersion();
+    }
+
+    function getFacetVersion(address facet) external view returns (Version memory) {
+        return LibVersion.getFacetVersion(facet);
+    }
+
+    function isCompatible(Version memory otherVersion) external view override returns (bool) {
+        return LibVersion.isCompatible(LibVersion.getVersion(), otherVersion);
     }
 }

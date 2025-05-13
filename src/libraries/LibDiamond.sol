@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 import {IDiamond} from "../interfaces/IDiamond.sol";
 import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
+import {IVersioned} from "../interfaces/IVersioned.sol";
+import {LibVersion} from "./LibVersion.sol";
 
 library LibDiamond {
     struct FacetAddressAndSelectorPosition {
@@ -87,6 +89,15 @@ library LibDiamond {
         DiamondStorage storage ds = diamondStorage();
         uint16 selectorCount = uint16(ds.selectors.length);
         enforceHasContractCode(_facetAddress, "LibDiamondCut: Add facet has no code");
+        
+        // Check if facet implements IVersioned
+        try IVersioned(_facetAddress).getVersion() returns (IVersioned.Version memory version) {
+            LibVersion.setFacetVersion(_facetAddress, version.major, version.minor, version.patch);
+        } catch {
+            // If facet doesn't implement IVersioned, set version to 1.0.0
+            LibVersion.setFacetVersion(_facetAddress, 1, 0, 0);
+        }
+
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
             address oldFacetAddress = ds.facetAddressAndSelectorPosition[selector].facetAddress;
@@ -105,6 +116,23 @@ library LibDiamond {
             revert CannotReplaceFunctionsFromFacetWithZeroAddress(_functionSelectors);
         }
         enforceHasContractCode(_facetAddress, "LibDiamondCut: Replace facet has no code");
+
+        // Check if new facet implements IVersioned
+        try IVersioned(_facetAddress).getVersion() returns (IVersioned.Version memory newVersion) {
+            // Get old facet version
+            IVersioned.Version memory oldVersion = LibVersion.getFacetVersion(_facetAddress);
+            
+            // Check compatibility
+            if (!LibVersion.isCompatible(oldVersion, newVersion)) {
+                revert("Incompatible facet version");
+            }
+            
+            LibVersion.setFacetVersion(_facetAddress, newVersion.major, newVersion.minor, newVersion.patch);
+        } catch {
+            // If facet doesn't implement IVersioned, set version to 1.0.0
+            LibVersion.setFacetVersion(_facetAddress, 1, 0, 0);
+        }
+
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
             address oldFacetAddress = ds.facetAddressAndSelectorPosition[selector].facetAddress;
